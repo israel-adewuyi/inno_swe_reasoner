@@ -1,12 +1,17 @@
 from inno_swe_reasoner.coconut.config import CoconutTrainerConfig
 from inno_swe_reasoner.utils.pydantic_config import parse_argv
 from inno_swe_reasoner.model import setup_model, setup_tokenizer
+from inno_swe_reasoner.utils.logger import setup_logger
 
-def train(config: CoconutTrainerConfig):    
+def train(config: CoconutTrainerConfig):
+    # Setup logger
+    logger = setup_logger(log_level="INFO") # TODO: Make log file and log level configurable
     # Setup model
-    model = setup_model(config.model)
+    logger.info("Setting up model...")
+    # model = setup_model(config.model)
 
     # Setup tokenizer
+    logger.info("Setting up tokenizer...")
     tokenizer = setup_tokenizer(config.model)
 
 
