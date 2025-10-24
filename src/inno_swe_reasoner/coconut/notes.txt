@@ -1,0 +1,48 @@
+# Dataset format: [Prompt, CoT_steps, Answer]
+# where CoT_steps = [step1, step2, ..., stepN]
+
+# Training loop
+for stage in range(num_stages + 1):
+    for epoch in range(epochs_per_stage):
+        for datapoint in dataset:
+            # Prepare input based on current stage
+            if stage == 0:
+                # Stage 0: Regular CoT training
+                input_text = [Prompt, CoT_steps, Answer]
+                input_embeddings = embed_tokens(input_text)
+            else:
+                # Later stages: Replace first 'stage' steps with continuous thoughts
+                num_continuous_thoughts = stage * c  # c thoughts per removed step
+                remaining_cot = CoT_steps[stage:]  # Keep remaining steps
+                
+                # Start with prompt + <bot> token
+                input_embeddings = embed_tokens([Prompt, <bot>])
+                
+                # Generate continuous thoughts (n+1 forward passes for n thoughts)
+                for _ in range(num_continuous_thoughts):
+                    hidden_states = model(input_embeddings)
+                    last_hidden = hidden_states[:, -1, :]  # Get last hidden state
+                    # Feed it back as next input embedding (key innovation!)
+                    input_embeddings = torch.cat([input_embeddings, last_hidden.unsqueeze(1)], dim=1)
+                
+                # Add <eot> token and remaining CoT + Answer
+                eot_embedding = embed_tokens([<eot>])
+                remaining_text = embed_tokens(remaining_cot + [Answer])
+                input_embeddings = torch.cat([input_embeddings, eot_embedding, remaining_text], dim=1)
+            
+            # Final forward pass to compute loss
+            logits = model(input_embeddings)
+            
+            # Compute loss only on remaining CoT + Answer (mask prompt and continuous thoughts)
+            loss = compute_masked_loss(logits, targets, mask_positions=[prompt, continuous_thoughts])
+            
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+    
+    # Reset optimizer state when switching stages
+    if stage < num_stages:
+        optimizer = create_new_optimizer()  # Reset optimizer state
+        
+
+
