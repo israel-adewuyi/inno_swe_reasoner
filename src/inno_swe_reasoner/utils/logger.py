@@ -64,3 +64,23 @@ def setup_logger(log_level: str, log_file: Path | None = None):
     _LOGGER = logger
 
     return logger
+
+def get_logger():
+    """
+    Get the global logger. This function is shared across submodules such as
+    training and inference to access the global logger instance. Raises if the
+    logger has not been set.
+
+    Returns:
+        The global logger.
+    """
+    global _LOGGER
+    if _LOGGER is None:
+        raise RuntimeError("Logger not set. Please call `set_logger` first.")
+    return _LOGGER
+
+
+def reset_logger():
+    """Reset the global logger. Useful mainly in test to clear loggers between tests."""
+    global _LOGGER
+    _LOGGER = None
