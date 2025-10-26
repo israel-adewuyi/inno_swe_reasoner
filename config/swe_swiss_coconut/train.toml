@@ -1,2 +1,7 @@
 [model]
 name = "Qwen/Qwen3-0.6B"
+
+[data]
+name = "SWE-Swiss/SWESwiss-SFT-Repair-4K"
+split = "train"
+num_samples = 2
