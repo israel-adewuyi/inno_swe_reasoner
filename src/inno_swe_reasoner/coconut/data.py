@@ -227,10 +227,11 @@ def tokenize_data(
     assistant_content = "\n".join(assistant_parts) if assistant_parts else ""
     
     # Create messages
-    messages = [
-        {"role": "user", "content": prompt},
-        {"role": "assistant", "content": assistant_content}
-    ]
+    messages = []
+    if prompt is not None:
+        messages.append({"role": "user", "content": prompt})
+    if assistant_content is not None:
+        messages.append({"role": "assistant", "content": assistant_content})
     
     # Tokenize
     input_ids = tokenizer.apply_chat_template(

@@ -9,7 +9,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 def setup_model(config: Any) -> AutoModelForCausalLM: #TODO: I think model config should be the type here.
     """Returns the model specified in the config. """
-    return CoconutModelForCausalLM(AutoModelForCausalLM.from_pretrained(config.name))
+    return CoconutModelForCausalLM(AutoModelForCausalLM.from_pretrained(config.name).to("cuda"))
 
 
 def setup_tokenizer(config: Any) -> AutoTokenizer:

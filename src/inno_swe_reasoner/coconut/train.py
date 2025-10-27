@@ -48,15 +48,20 @@ def train(config: CoconutTrainerConfig):
                     steps_to_replace = min(stage, len(cot_steps))  # Handle shorter chains
                     num_continuous_thoughts = steps_to_replace * config.data.c  # c thoughts per step
                     remaining_cot = cot_steps[steps_to_replace:]  # Remaining language steps
-                
+                    
+                    logger.info(f"Before run: Allocated:, {torch.cuda.memory_allocated(0) / 1024 ** 2}, MB")
+
+                    logger.info(f"Currently in stage {stage}")
                     if stage == 0:
                         # Stage 0: Regular CoT training (no continuous thoughts)
                         input_ids, loss_mask = tokenize_data(tokenizer, prompt, cot_steps, answer)
-                        target_ids = torch.tensor(input_ids.copy()[1:]).unsqueeze(0)
-                        input_ids = torch.tensor(input_ids[:-1]).unsqueeze(0)
-                        loss_mask = torch.tensor(loss_mask).unsqueeze(0)
-                        position_ids = torch.tensor(list(range(len(input_ids)))).unsqueeze(0)
+                        target_ids = torch.tensor(input_ids.copy()[1:]).unsqueeze(0).to("cuda")
+                        input_ids = torch.tensor(input_ids[:-1]).unsqueeze(0).to("cuda")
+                        loss_mask = torch.tensor(loss_mask).unsqueeze(0).to("cuda")
+                        position_ids = torch.tensor(list(range(len(input_ids)))).unsqueeze(0).to("cuda")
 
+                        logger.info(f"After reading in inputs: Allocated:, {torch.cuda.memory_allocated(0) / 1024 ** 2}, MB")
+                        
                         assert input_ids.shape == target_ids.shape == loss_mask.shape, (
                             f"input_ids, loss_mask and target_ids must have the same length, but got {input_ids.shape=}, {loss_mask.shape=}, {target_ids.shape=}"
                         )
@@ -66,7 +71,20 @@ def train(config: CoconutTrainerConfig):
                         B, L, V = logits.shape
                         loss = cross_entropy(logits.view(-1, V), target_ids.view(-1), reduction="none").view(B, L)
                         
+                        logger.info(f"After forward pass: Allocated:, {torch.cuda.memory_allocated(0) / 1024 ** 2}, MB")
+                        
+                        del logits
+                        del input_ids
+                        # del loss_mask
+                        del position_ids
+                        del target_ids
+                        
+                        logger.info(f"Allocated:, {torch.cuda.memory_allocated(0) / 1024 ** 2}, MB")
+                        
+                        
                         loss = loss[loss_mask].mean()
+                        
+                        logger.info(f"Allocated:, {torch.cuda.memory_allocated(0) / 1024 ** 2}, MB")
                         
                         loss.backward()
                         optimizer.step()
@@ -75,9 +93,27 @@ def train(config: CoconutTrainerConfig):
                         # # Single forward pass
                         # logits = model(input_embeddings)
                         # loss = compute_loss(logits, targets, mask_prompt=True)
+                    else:
+                        input_ids, _ = tokenize_data(prompt=prompt+'<bot>')
+                        input_embeddings = model.get_embeddings(input_ids)
+                        
+                        # Generate continuous thoughts (iterative forward passes)
+                        num_continuous_thoughts = 1 #TODO: Remove this later. 
+                        for i in range(num_continuous_thoughts):
+                            hidden_states = model.forward_from_embeddings(input_embeddings, None, True)
+                            logger.info(f"Shape of hidden state is {hidden_states.shape}")
+                            last_hidden = hidden_states[:, -1, :]  # Shape: [batch, hidden_dim]
+                            
+                            # KEY: Feed hidden state back as next input embedding
+                            # (Note: last_hidden is already normalized by final layer norm)
+                            input_embeddings = torch.cat([
+                                input_embeddings, 
+                                last_hidden.unsqueeze(1)
+                            ], dim=1)
+                        
                 # Forward pass
             break
-        break
+        # break
 
 
 def main():
