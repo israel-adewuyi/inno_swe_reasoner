@@ -215,7 +215,7 @@ def tokenize_data(
     prompt: str = None,
     cot_steps: Optional[List[str]] = None,
     answer: Optional[str] = None,
-) -> Dict[str, torch.Tensor]:
+) -> List[int]:
     """ Tokenize a list of prompts. """
     # Build assistant content
     assistant_parts = []
@@ -237,5 +237,14 @@ def tokenize_data(
         conversation=messages,
         add_generation_prompt=False,
     )
+
+    user_messages = [{"role": "user", "content": prompt}]
+    user_ids = tokenizer.apply_chat_template(
+        conversation=user_messages,
+        add_generation_prompt=True,  # Includes the assistant header
+    )
     
-    return input_ids
+    # Create mask: 0 for user tokens, 1 for assistant tokens
+    loss_mask = [0] * len(user_ids) + [1] * (len(input_ids) - len(user_ids))
+    
+    return input_ids, loss_mask[1:]
