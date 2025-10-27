@@ -9,9 +9,17 @@ class CoconutDataConfig(BaseConfig):
     # Split to use
     split: str = "train"
     # Maximum sequence length
-    max_seq_length: int = 1024
+    max_seq_length: int = 65536
     # Number of samples to use (for debugging, None means all)
     num_samples: int | None = None
+    # if to shuffle the dataset
+    shuffle: bool = True
+    # batch size
+    batch_size: int = 4
+    # seed
+    seed: int = 42
+    # max epochs
+    max_epochs: int = 3
 
 class CoconutTrainerConfig(BaseSettings):
     """ Configuration class for COCONUT trainer. """
