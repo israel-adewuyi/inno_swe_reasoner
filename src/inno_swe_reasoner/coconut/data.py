@@ -1,4 +1,5 @@
 # Adapted from https://github.com/PrimeIntellect-ai/prime-rl/blob/main/src/prime_rl/trainer/sft/data.py
+import re
 import json
 import torch
 from typing import Dict, List, Optional, cast
@@ -13,7 +14,7 @@ from inno_swe_reasoner.utils.logger import get_logger
 class SFTDataset(IterableDataset):
     """ Dataset wrapping HF SFT dataset with `message` format. """
     def __init__(
-        self, 
+        self,
         dataset: Dataset,
         tokenizer: AutoTokenizer,
         shuffle: bool = True,
@@ -44,11 +45,29 @@ class SFTDataset(IterableDataset):
         print(f"Example type of value = {type(example["messages"])}")
         return example
     
-    def _process(self, example: dict):
-        # Skip tokenizer if no tokenizer is provided
-        if self.tokenizer is None:
-            return example
+    def _extract_structured_components(self, messages: list[dict]) -> dict:
+        prompt = next(msg['content'] for msg in messages if msg['role'] == 'user')
+        assistant_msg = next(msg['content'] for msg in messages if msg['role'] == 'assistant')
+        
+        # Parse think tags
+        think_match = re.search(r'<think>(.*?)</think>', assistant_msg, re.DOTALL)
+        
+        if think_match:
+            think_content = think_match.group(1).strip()
+            answer = assistant_msg.replace(think_match.group(0), '').strip()
+            cot_steps = [step.strip() for step in think_content.split('\n') if step.strip()]
+        else:
+            cot_steps = []
+            answer = assistant_msg.strip()
+        
+        return {
+            'prompt': prompt,
+            'cot_steps': cot_steps,
+            'answer': answer,
+            'messages': messages,  # Keep original for flexible tokenization
+        }
 
+    def _process(self, example: dict):
         # Assumes that the key 'messages' exists in the example dict
         if "messages" not in example:
             raise ValueError("All examples must have a 'messages' column for SFT training.")
@@ -66,93 +85,43 @@ class SFTDataset(IterableDataset):
 
             return [_strip_content(message) for message in messages]
         
-        def build_loss_mask(messages: list[dict], tokenizer) -> list[int]:
-            """
-            Build loss mask by incrementally tokenizing messages and using their loss_mask values.
-            """
-            loss_mask: list[int] = []
-            prev_ids, prev_len = [], 0
+        # def build_loss_mask(messages: list[dict], tokenizer) -> list[int]:
+        #     """
+        #     Build loss mask by incrementally tokenizing messages and using their loss_mask values.
+        #     """
+        #     loss_mask: list[int] = []
+        #     prev_ids, prev_len = [], 0
             
-            for i, message in enumerate(messages):
-                assert "role" in message, "Message must have a role"
-                assert "loss_mask" in message, "Message must have a loss_mask field"
+        #     for i, message in enumerate(messages):
+        #         assert "role" in message, "Message must have a role"
+        #         assert "loss_mask" in message, "Message must have a loss_mask field"
                 
-                # Tokenize up to current message
-                cur_ids = tokenizer.apply_chat_template(
-                    messages[: i + 1],
-                    add_generation_prompt=False,
-                    **example.get("chat_template_kwargs", {}),
-                )
+        #         # Tokenize up to current message
+        #         cur_ids = tokenizer.apply_chat_template(
+        #             messages[: i + 1],
+        #             add_generation_prompt=False,
+        #             **example.get("chat_template_kwargs", {}),
+        #         )
                 
-                # Validate incremental tokenization
-                assert prev_ids == cur_ids[:prev_len], (
-                    f"Mismatch in incremental tokenization at message {i}. "
-                    f"Previous ids: {prev_ids} != {cur_ids[:prev_len]}"
-                )
+        #         # Validate incremental tokenization
+        #         assert prev_ids == cur_ids[:prev_len], (
+        #             f"Mismatch in incremental tokenization at message {i}. "
+        #             f"Previous ids: {prev_ids} != {cur_ids[:prev_len]}"
+        #         )
                 
-                # Extend loss mask with this message's mask value for all its tokens
-                num_new_tokens = len(cur_ids) - prev_len
-                loss_mask.extend([message["loss_mask"]] * num_new_tokens)
+        #         # Extend loss mask with this message's mask value for all its tokens
+        #         num_new_tokens = len(cur_ids) - prev_len
+        #         loss_mask.extend([message["loss_mask"]] * num_new_tokens)
                 
-                prev_ids, prev_len = cur_ids, len(cur_ids)
+        #         prev_ids, prev_len = cur_ids, len(cur_ids)
             
-            return loss_mask
+        #     return loss_mask
         
         example = parse_messages(example)
         messages = strip_content(example['messages'])
         
-        # Validate that all messages have loss_mask
-        for msg in messages:
-            if "loss_mask" not in msg:
-                raise ValueError(f"Message with role '{msg['role']}' missing loss_mask field")
-        
-        prompt = example['messages'][0] if example['messages'][0]['role'] == 'user' else example['messages'][1]
-        completion = example["messages"][-1] if example['messages'][-1]['role'] == 'assistant' else example['messages'][-2]
-        
-        # Tokenize all messages
-        input_ids = self.tokenizer.apply_chat_template(
-            messages,
-            add_generation_prompt=False,
-            **example.get("chat_template_kwargs", {}),
-        )
-        
-        # Build loss mask based on per-message loss_mask values
-        loss_mask = build_loss_mask(messages, self.tokenizer) 
-        
-        # If EOS token is not found, manually append it
-        if not self.tokenizer.eos_token_id in input_ids:
-            self.logger.warning(
-                f"Did not find EOS token ID {self.tokenizer.eos_token_id} in input_ids. Is something wrong with the chat template? Manually appending EOS token..."
-            )
-            input_ids.append(cast(int, self.tokenizer.eos_token_id))
-            loss_mask.append(True)
-            
-        # Prepare inputs
-        target_ids = input_ids.copy()[1:]
-        loss_mask = loss_mask[1:]
-        input_ids = input_ids[:-1]
-        
-        if sum(loss_mask[: self.seq_len]) == 0:
-            self.logger.warning(
-                f"Skipping example {example.get('__index', '')} because no trainable tokens were found within the context window ({self.seq_len}). This is to prevent NaN loss."
-            )
-            return
-
-        assert len(input_ids) == len(loss_mask) == len(target_ids), (
-            f"input_ids, loss_mask and target_ids must have the same length, but got {len(input_ids)=}, {len(loss_mask)=}, {len(target_ids)=}"
-        )
-        assert sum(loss_mask) > 0, "There are no tokens in this sample that contribute to the loss"
-        assert self.tokenizer.eos_token_id in target_ids, "EOS token ID must be present in target_ids"
-
-        # Create sample (with one fake target for the last token)
-        return {
-            "input_ids": input_ids,
-            "target_ids": target_ids,
-            "loss_mask": loss_mask,
-            "position_ids": list(range(len(input_ids))),
-        }
-        
-        
+        structured_example = self._extract_structured_components(messages)
+        return structured_example
     
     def __iter__(self):
         """
@@ -183,55 +152,16 @@ class SFTDataset(IterableDataset):
             
             yield processed_example
 
-
-def collate_fn_padding(
-    batch: List[Dict[str, List[int]]], 
-    pad_token_id: int,
-    seq_len: Optional[int] = None
-) -> Dict[str, torch.Tensor]:
+def collate_fn(batch: List[Dict]) -> Dict[str, List]:
     """
-    Collate function that pads sequences to the same length within a batch.
-    
-    Design notes for future packing implementation:
-    - Currently pads each sequence independently to max length in batch
-    - For packing: replace this with a function that concatenates multiple
-      sequences into fixed-length chunks of seq_len tokens
-    - Packing will require tracking sequence boundaries with attention masks
+    Simple collation for structured data - just group fields into lists.
+    No padding needed since we're not dealing with tensors yet.
     """
-    # Find max length in this batch (or use seq_len if provided)
-    if seq_len is None:
-        max_len = max(len(item["input_ids"]) for item in batch)
-    else:
-        max_len = seq_len
-    
-    # Initialize padded tensors
-    batch_size = len(batch)
-    padded_input_ids = torch.full((batch_size, max_len), pad_token_id, dtype=torch.long)
-    padded_target_ids = torch.full((batch_size, max_len), pad_token_id, dtype=torch.long)
-    padded_loss_mask = torch.zeros((batch_size, max_len), dtype=torch.bool)
-    padded_position_ids = torch.zeros((batch_size, max_len), dtype=torch.long)
-    attention_mask = torch.zeros((batch_size, max_len), dtype=torch.bool)
-    
-    for i, item in enumerate(batch):
-        seq_length = len(item["input_ids"])
-        
-        # Truncate if longer than max_len
-        if seq_length > max_len:
-            seq_length = max_len
-        
-        # Fill in the actual values (left-aligned, right-padded)
-        padded_input_ids[i, :seq_length] = torch.tensor(item["input_ids"][:seq_length])
-        padded_target_ids[i, :seq_length] = torch.tensor(item["target_ids"][:seq_length])
-        padded_loss_mask[i, :seq_length] = torch.tensor(item["loss_mask"][:seq_length])
-        padded_position_ids[i, :seq_length] = torch.tensor(item["position_ids"][:seq_length])
-        attention_mask[i, :seq_length] = True  # Mark non-padding positions
-    
     return {
-        "input_ids": padded_input_ids,
-        "target_ids": padded_target_ids,
-        "loss_mask": padded_loss_mask,
-        "position_ids": padded_position_ids,
-        "attention_mask": attention_mask,
+        'prompt': [item['prompt'] for item in batch],
+        'cot_steps': [item['cot_steps'] for item in batch],  # List of List[str]
+        'answer': [item['answer'] for item in batch],
+        'messages': [item['messages'] for item in batch],  # Keep if needed
     }
 
 
@@ -240,46 +170,34 @@ def setup_dataloader(
     config: CoconutDataConfig,
 ) -> DataLoader:
     """
-    Create a DataLoader for the iterable SFTDataset.
+    Create a DataLoader for structured (non-tokenized) data.
     """
-    # Get tokenizer from dataset
-    tokenizer = dataset.tokenizer
+    batch_size = getattr(config, 'batch_size', 1)
+    num_workers = 0  # Keep 0 for iterable datasets
+    pin_memory = False  # No tensors to pin
     
-    # Ensure pad token exists
-    pad_token_id = tokenizer.pad_token_id
-    if pad_token_id is None:
-        pad_token_id = tokenizer.eos_token_id
-    
-    # Extract config values (with defaults)
-    batch_size = getattr(config, 'batch_size', 4)
-    num_workers = 0 # 0 for iterable datasets
-    seq_len = config.max_seq_length
-    pin_memory = getattr(config, 'pin_memory', True)
-    
-    # Create collate function
-    collate_fn = lambda batch: collate_fn_padding(
-        batch, 
-        pad_token_id=pad_token_id,
-        seq_len=seq_len
-    )
-    
-    # Create DataLoader for iterable dataset
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
         num_workers=num_workers,
-        collate_fn=collate_fn,
+        collate_fn=collate_fn,  # Much simpler!
         pin_memory=pin_memory,
     )
     
-    return dataloader           
+    return dataloader        
 
 
 def setup_dataset(config: CoconutDataConfig, tokenizer: AutoTokenizer) -> Dataset:
     logger = get_logger()
     
     logger.info(f"Loading dataset from {config.name} split {config.split}...")
-    dataset = load_dataset(config.name, split=config.split)
+    # dataset = load_dataset(config.name, split=config.split)
+    # Load the JSON file
+    with open("src\inno_swe_reasoner\coconut\mock_data.json", 'r') as f:
+        data = json.load(f)
+
+    # Convert to HuggingFace Dataset
+    dataset = Dataset.from_list(data)
     if config.num_samples is not None:
         dataset = dataset.take(config.num_samples)
         logger.info(f"Selected first {config.num_samples} samples from the dataset.")
@@ -291,3 +209,33 @@ def setup_dataset(config: CoconutDataConfig, tokenizer: AutoTokenizer) -> Datase
         seed=config.seed,
         shuffle=config.shuffle,
     )
+
+def tokenize_data(
+    tokenizer: AutoTokenizer,
+    prompt: str = None,
+    cot_steps: Optional[List[str]] = None,
+    answer: Optional[str] = None,
+) -> Dict[str, torch.Tensor]:
+    """ Tokenize a list of prompts. """
+    # Build assistant content
+    assistant_parts = []
+    if cot_steps:
+        assistant_parts.append("\n".join(cot_steps))
+    if answer:
+        assistant_parts.append(answer)
+    
+    assistant_content = "\n".join(assistant_parts) if assistant_parts else ""
+    
+    # Create messages
+    messages = [
+        {"role": "user", "content": prompt},
+        {"role": "assistant", "content": assistant_content}
+    ]
+    
+    # Tokenize
+    input_ids = tokenizer.apply_chat_template(
+        conversation=messages,
+        add_generation_prompt=False,
+    )
+    
+    return input_ids

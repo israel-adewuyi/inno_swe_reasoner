@@ -15,11 +15,17 @@ class CoconutDataConfig(BaseConfig):
     # if to shuffle the dataset
     shuffle: bool = True
     # batch size
-    batch_size: int = 4
+    batch_size: int = 1
     # seed
     seed: int = 42
     # max epochs
     max_epochs: int = 3
+    # COCONUT specific parameters
+    # num coconut stages
+    num_stages: int = 3
+    # number of continuous thoughts per step
+    c: int = 2
+    epoch_per_stage: int = 2
 
 class CoconutTrainerConfig(BaseSettings):
     """ Configuration class for COCONUT trainer. """
