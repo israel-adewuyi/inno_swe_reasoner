@@ -193,7 +193,7 @@ def setup_dataset(config: CoconutDataConfig, tokenizer: AutoTokenizer) -> Datase
     logger.info(f"Loading dataset from {config.name} split {config.split}...")
     # dataset = load_dataset(config.name, split=config.split)
     # Load the JSON file
-    with open("src\inno_swe_reasoner\coconut\mock_data.json", 'r') as f:
+    with open("src/inno_swe_reasoner/coconut/mock_data.json", 'r') as f:
         data = json.load(f)
 
     # Convert to HuggingFace Dataset

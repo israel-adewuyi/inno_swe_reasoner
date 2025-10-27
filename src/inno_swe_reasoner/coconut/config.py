@@ -1,6 +1,8 @@
 from inno_swe_reasoner.utils.pydantic_config import BaseConfig, BaseSettings
-from inno_swe_reasoner.config import ModelConfig
+from inno_swe_reasoner.config import ModelConfig, AdamWConfig, OptimizerConfigType
 
+from pydantic import Field
+from typing import Annotated
 
 class CoconutDataConfig(BaseConfig):
     """ Configuration class for COCONUT SFT data processing. """
@@ -35,5 +37,7 @@ class CoconutTrainerConfig(BaseSettings):
     # data related config
     data: CoconutDataConfig = CoconutDataConfig()
     
+    # The optimizer configuration
+    optim: Annotated[OptimizerConfigType, Field(discriminator="type")] = AdamWConfig()
 
     
