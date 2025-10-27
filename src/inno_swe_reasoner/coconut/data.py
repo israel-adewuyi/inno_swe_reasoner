@@ -245,6 +245,6 @@ def tokenize_data(
     )
     
     # Create mask: 0 for user tokens, 1 for assistant tokens
-    loss_mask = [0] * len(user_ids) + [1] * (len(input_ids) - len(user_ids))
+    loss_mask = [False] * len(user_ids) + [True] * (len(input_ids) - len(user_ids))
     
     return input_ids, loss_mask[1:]
