@@ -2,7 +2,7 @@ from inno_swe_reasoner.coconut.config import CoconutTrainerConfig
 from inno_swe_reasoner.utils.pydantic_config import parse_argv
 from inno_swe_reasoner.model import setup_model, setup_tokenizer
 from inno_swe_reasoner.utils.logger import setup_logger
-from inno_swe_reasoner.coconut.data import setup_dataset, SFTDataset
+from inno_swe_reasoner.coconut.data import setup_dataset, setup_dataloader
 
 def train(config: CoconutTrainerConfig):
     # Setup logger
@@ -19,14 +19,16 @@ def train(config: CoconutTrainerConfig):
     logger.info("Setting up dataset...")
     dataset = setup_dataset(config.data, tokenizer)
     
-    sft_dataset = SFTDataset(dataset=dataset, tokenizer=tokenizer)
+    dataloader = setup_dataloader(dataset, config.data)
+    dataiter = iter(dataloader)
 
     # Debug
-    for datapoint in sft_dataset:
-        print(datapoint)
+    while True:
+        point = next(dataiter)
+        print(point)
         break
     
-    print(dataset)
+    # print(dataset)
 
 
 def main():

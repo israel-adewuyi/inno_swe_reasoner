@@ -1,14 +1,16 @@
 # Adapted from https://github.com/PrimeIntellect-ai/prime-rl/blob/main/src/prime_rl/trainer/sft/data.py
-
 import json
+import torch
+from typing import Dict, List, Optional, cast
 from transformers import AutoTokenizer
+from torch.utils.data import DataLoader, IterableDataset
 from datasets import Dataset, load_dataset
 
 from inno_swe_reasoner.coconut.config import CoconutDataConfig
 from inno_swe_reasoner.utils.logger import get_logger
 
 
-class SFTDataset:
+class SFTDataset(IterableDataset):
     """ Dataset wrapping HF SFT dataset with `message` format. """
     def __init__(
         self, 
@@ -40,7 +42,6 @@ class SFTDataset:
         print(f"Example type: {type(example)}")
         print(f"Example keys: {example.keys() if isinstance(example, dict) else 'Not a dict'}")
         print(f"Example type of value = {type(example["messages"])}")
-        # print(f"Example content: {example}")
         return example
     
     def _process(self, example: dict):
@@ -181,7 +182,97 @@ class SFTDataset:
                 continue
             
             yield processed_example
-                
+
+
+def collate_fn_padding(
+    batch: List[Dict[str, List[int]]], 
+    pad_token_id: int,
+    seq_len: Optional[int] = None
+) -> Dict[str, torch.Tensor]:
+    """
+    Collate function that pads sequences to the same length within a batch.
+    
+    Design notes for future packing implementation:
+    - Currently pads each sequence independently to max length in batch
+    - For packing: replace this with a function that concatenates multiple
+      sequences into fixed-length chunks of seq_len tokens
+    - Packing will require tracking sequence boundaries with attention masks
+    """
+    # Find max length in this batch (or use seq_len if provided)
+    if seq_len is None:
+        max_len = max(len(item["input_ids"]) for item in batch)
+    else:
+        max_len = seq_len
+    
+    # Initialize padded tensors
+    batch_size = len(batch)
+    padded_input_ids = torch.full((batch_size, max_len), pad_token_id, dtype=torch.long)
+    padded_target_ids = torch.full((batch_size, max_len), pad_token_id, dtype=torch.long)
+    padded_loss_mask = torch.zeros((batch_size, max_len), dtype=torch.bool)
+    padded_position_ids = torch.zeros((batch_size, max_len), dtype=torch.long)
+    attention_mask = torch.zeros((batch_size, max_len), dtype=torch.bool)
+    
+    for i, item in enumerate(batch):
+        seq_length = len(item["input_ids"])
+        
+        # Truncate if longer than max_len
+        if seq_length > max_len:
+            seq_length = max_len
+        
+        # Fill in the actual values (left-aligned, right-padded)
+        padded_input_ids[i, :seq_length] = torch.tensor(item["input_ids"][:seq_length])
+        padded_target_ids[i, :seq_length] = torch.tensor(item["target_ids"][:seq_length])
+        padded_loss_mask[i, :seq_length] = torch.tensor(item["loss_mask"][:seq_length])
+        padded_position_ids[i, :seq_length] = torch.tensor(item["position_ids"][:seq_length])
+        attention_mask[i, :seq_length] = True  # Mark non-padding positions
+    
+    return {
+        "input_ids": padded_input_ids,
+        "target_ids": padded_target_ids,
+        "loss_mask": padded_loss_mask,
+        "position_ids": padded_position_ids,
+        "attention_mask": attention_mask,
+    }
+
+
+def setup_dataloader(
+    dataset: SFTDataset,
+    config: CoconutDataConfig,
+) -> DataLoader:
+    """
+    Create a DataLoader for the iterable SFTDataset.
+    """
+    # Get tokenizer from dataset
+    tokenizer = dataset.tokenizer
+    
+    # Ensure pad token exists
+    pad_token_id = tokenizer.pad_token_id
+    if pad_token_id is None:
+        pad_token_id = tokenizer.eos_token_id
+    
+    # Extract config values (with defaults)
+    batch_size = getattr(config, 'batch_size', 4)
+    num_workers = 0 # 0 for iterable datasets
+    seq_len = config.max_seq_length
+    pin_memory = getattr(config, 'pin_memory', True)
+    
+    # Create collate function
+    collate_fn = lambda batch: collate_fn_padding(
+        batch, 
+        pad_token_id=pad_token_id,
+        seq_len=seq_len
+    )
+    
+    # Create DataLoader for iterable dataset
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        collate_fn=collate_fn,
+        pin_memory=pin_memory,
+    )
+    
+    return dataloader           
 
 
 def setup_dataset(config: CoconutDataConfig, tokenizer: AutoTokenizer) -> Dataset:
@@ -193,4 +284,10 @@ def setup_dataset(config: CoconutDataConfig, tokenizer: AutoTokenizer) -> Datase
         dataset = dataset.take(config.num_samples)
         logger.info(f"Selected first {config.num_samples} samples from the dataset.")
     
-    return dataset
+    return SFTDataset(
+        dataset=dataset,
+        tokenizer=tokenizer,
+        seq_len=config.max_seq_length,
+        seed=config.seed,
+        shuffle=config.shuffle,
+    )
