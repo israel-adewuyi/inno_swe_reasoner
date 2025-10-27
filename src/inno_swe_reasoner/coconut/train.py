@@ -1,5 +1,6 @@
 import torch
 
+from torch.nn.functional import cross_entropy
 from inno_swe_reasoner.coconut.config import CoconutTrainerConfig
 from inno_swe_reasoner.utils.pydantic_config import parse_argv
 from inno_swe_reasoner.coconut.model import setup_model, setup_tokenizer
@@ -38,7 +39,8 @@ def train(config: CoconutTrainerConfig):
         
         for stage in range(config.data.num_stages + 1):
             if stage > 0:
-                optimizer = create_new_optimizer() # TODO: Implement this function
+                logger.info(f"Resetting optimizer at Stage {stage}")
+                optimizer = setup_optimizer(config.optim, model) # TODO: Implement this function
 
             for epochs in range(config.data.epoch_per_stage):
                 for prompt, cot_steps, answer in zip(batch["prompt"], batch["cot_steps"], batch["answer"]):
@@ -49,19 +51,26 @@ def train(config: CoconutTrainerConfig):
                 
                     if stage == 0:
                         # Stage 0: Regular CoT training (no continuous thoughts)
-                        input_ids = tokenize_data(tokenizer, prompt, cot_steps, answer)
-                        target_ids = input_ids.copy()[1:]
-                        #TODO: I need to generate the loss mask
-                        input_ids = input_ids[:-1]
+                        input_ids, loss_mask = tokenize_data(tokenizer, prompt, cot_steps, answer)
+                        target_ids = torch.tensor(input_ids.copy()[1:]).unsqueeze(0)
+                        input_ids = torch.tensor(input_ids[:-1]).unsqueeze(0)
+                        loss_mask = torch.tensor(loss_mask).unsqueeze(0)
                         position_ids = torch.tensor(list(range(len(input_ids)))).unsqueeze(0)
-                        
-                        logger.info(input_ids)
-                        input_embeddings = model.get_embeddings(torch.tensor(input_ids).unsqueeze(0)) # TODO: Add batch dim.
-                        logger.info(f"Shape of input embeddings is {input_embeddings.shape}")
-                        logger.info(f"Type of input embeddings is {type(input_embeddings)}")
 
-                        logits = model.embed_and_forward(torch.tensor(input_ids).unsqueeze(0), position_ids, False)
-                        logger.info(f"Shape of logits is {logits.shape}")
+                        assert input_ids.shape == target_ids.shape == loss_mask.shape, (
+                            f"input_ids, loss_mask and target_ids must have the same length, but got {input_ids.shape=}, {loss_mask.shape=}, {target_ids.shape=}"
+                        )
+
+                        # run forward pass on the tokens
+                        logits = model.embed_and_forward(input_ids, position_ids, False)
+                        B, L, V = logits.shape
+                        loss = cross_entropy(logits.view(-1, V), target_ids.view(-1), reduction="none").view(B, L)
+                        
+                        loss = loss[loss_mask].mean()
+                        
+                        loss.backward()
+                        optimizer.step()
+                        optimizer.zero_grad()
                         
                         # # Single forward pass
                         # logits = model(input_embeddings)
