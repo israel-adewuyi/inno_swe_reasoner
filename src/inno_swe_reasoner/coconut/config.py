@@ -1,8 +1,10 @@
-from inno_swe_reasoner.utils.pydantic_config import BaseConfig, BaseSettings
-from inno_swe_reasoner.config import ModelConfig, AdamWConfig, OptimizerConfigType
+from pathlib import Path
 
 from pydantic import Field
 from typing import Annotated
+from inno_swe_reasoner.utils.pydantic_config import BaseConfig, BaseSettings
+from inno_swe_reasoner.config import ModelConfig, AdamWConfig, OptimizerConfigType
+from inno_swe_reasoner.config import WandbMonitorConfig
 
 
 class CoconutDataConfig(BaseConfig):
@@ -26,9 +28,9 @@ class CoconutDataConfig(BaseConfig):
     max_epochs: int = 3
     # COCONUT specific parameters
     # num coconut stages
-    num_stages: int = 2
+    num_stages: int = 3
     # number of continuous thoughts per step
-    c: int = 2
+    c: int = 3
     epoch_per_stage: int = 2
 
 
@@ -43,3 +45,13 @@ class CoconutTrainerConfig(BaseSettings):
 
     # The optimizer configuration
     optim: Annotated[OptimizerConfigType, Field(discriminator="type")] = AdamWConfig()
+
+    # The wandb configuration
+    wandb: WandbMonitorConfig | None = None
+
+    output_dir: Annotated[
+        Path,
+        Field(
+            description="Directory to write outputs to. Will be populated with checkpoints and logs as subdirectories. Should be set to a persistent directory with enough disk space. This value should be distinct across experiments running on a single node. See the README for more details."
+        ),
+    ] = Path("outputs")

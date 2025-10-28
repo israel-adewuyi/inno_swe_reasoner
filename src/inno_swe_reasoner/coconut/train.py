@@ -1,3 +1,4 @@
+import time
 import torch
 
 from torch.nn.functional import cross_entropy
@@ -7,6 +8,7 @@ from inno_swe_reasoner.coconut.model import setup_model, setup_tokenizer
 from inno_swe_reasoner.utils.logger import setup_logger
 from inno_swe_reasoner.optim import setup_optimizer
 from inno_swe_reasoner.coconut.coconut_utils import calculate_eot_offset
+from inno_swe_reasoner.utils.monitor import setup_monitor
 from inno_swe_reasoner.coconut.data import (
     setup_dataset,
     setup_dataloader,
@@ -27,6 +29,12 @@ def train(config: CoconutTrainerConfig):
     logger.info("Setting up tokenizer...")
     tokenizer = setup_tokenizer(config.model)
 
+    # Setup the monitor
+    logger.info(f"Initializing monitor ({config.wandb})")
+    monitor = setup_monitor(
+        config.wandb, output_dir=config.output_dir, run_config=config
+    )
+
     logger.info(f"Initializing optimizer ({config.optim})")
     optimizer = setup_optimizer(config.optim, model)
 
@@ -38,6 +46,7 @@ def train(config: CoconutTrainerConfig):
     eot_offset = calculate_eot_offset(tokenizer)
 
     # COCONUT Training
+    step = 0
     for stage in range(config.data.num_stages + 1):
         if stage > 0:
             logger.info(f"Resetting optimizer at Stage {stage}")
@@ -46,8 +55,9 @@ def train(config: CoconutTrainerConfig):
         for epochs in range(config.data.epoch_per_stage):
             logger.info(f"Starting epoch {epochs} at stage {stage}")
             for batch in dataloader:
+                step += 1
+                step_start_time = time.time()
                 batch_loss = 0.0
-                optimizer.zero_grad()
 
                 # This goes through each datapoint one by one
                 # Justification is that CoT on SWE_SWISS_SFT dataset is easily > 250K.
@@ -170,14 +180,29 @@ def train(config: CoconutTrainerConfig):
 
                         loss = loss[loss_mask].mean()
                         batch_loss += loss
-                        # logger.info(f"Example {idx} LOSS = {loss.item()}")
                 # After processing all examples in batch:
-                batch_loss = batch_loss / len(batch["prompt"])  # Average over batch
-                logger.success(f"BATCH LOSS = {batch_loss.item()}")
-                batch_loss.backward()  # Single backward pass
+                batch_loss = batch_loss / len(batch["prompt"])
+                batch_loss.backward()
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=config.optim.max_norm
+                )
+                step_time = time.time() - step_start_time
+
+                log_metrics = {
+                    "loss/batch_mean": batch_loss.item(),
+                    "optim/grad_norm": grad_norm.item(),
+                    "optim/learning_rate": optimizer.param_groups[0]["lr"],
+                    "timing/step_time": step_time,
+                    "timing/examples_per_sec": len(batch["prompt"]) / step_time,
+                    "training/stage": stage,
+                    "training/batch_size": len(batch["prompt"]),
+                }
+
+                monitor.log(log_metrics)
+                step_message = f"Step {step} | Time: {step_time:.2f}s | Loss: {batch_loss.item():.4f} | Grad. Norm: {grad_norm:.4f}"
+                logger.success(step_message)
                 optimizer.step()
-        # break
-    # break
+                optimizer.zero_grad()
 
 
 def main():

@@ -4,3 +4,6 @@ name = "Qwen/Qwen3-0.6B"
 [data]
 name = "SWE-Swiss/SWESwiss-SFT-Repair-4K"
 split = "train"
+
+[wandb]
+project = "demo_with_small_model"

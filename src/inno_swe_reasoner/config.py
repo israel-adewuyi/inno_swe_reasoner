@@ -24,7 +24,9 @@ class ModelConfig(BaseConfig):
         ),
     ] = "Qwen/Qwen3-0.6B"
 
-    attn: Annotated[AttnImplementation, Field(description="The attention implementation to use.")] = "flash_attention_2"
+    attn: Annotated[
+        AttnImplementation, Field(description="The attention implementation to use.")
+    ] = "flash_attention_2"
 
     trust_remote_code: Annotated[
         bool,
@@ -73,7 +75,9 @@ class ModelConfig(BaseConfig):
         """Trust remote code only if the model is from HF."""
         if self.trust_remote_code:
             if self.impl != "hf":
-                raise ValueError("Trust remote code is only supported with the HF implementation.")
+                raise ValueError(
+                    "Trust remote code is only supported with the HF implementation."
+                )
         return self
 
 
@@ -88,9 +92,12 @@ class LinearSchedulerConfig(BaseModel):
 
     type: Literal["linear"] = "linear"
 
-    warmup_steps: Annotated[int, Field(ge=0, description="Number of warmup steps for the learning rate scheduler.")] = (
-        10
-    )
+    warmup_steps: Annotated[
+        int,
+        Field(
+            ge=0, description="Number of warmup steps for the learning rate scheduler."
+        ),
+    ] = 10
 
     decay_steps: Annotated[
         int,
@@ -100,7 +107,9 @@ class LinearSchedulerConfig(BaseModel):
         ),
     ] = 10
 
-    min_lr: Annotated[float, Field(ge=0, description="Minimum learning rate to converge to.")] = 0.0
+    min_lr: Annotated[
+        float, Field(ge=0, description="Minimum learning rate to converge to.")
+    ] = 0.0
 
 
 class CosineSchedulerConfig(BaseModel):
@@ -108,20 +117,29 @@ class CosineSchedulerConfig(BaseModel):
 
     type: Literal["cosine"] = "cosine"
 
-    warmup_steps: Annotated[int, Field(ge=0, description="Number of warmup steps for the learning rate scheduler.")] = (
-        10
-    )
+    warmup_steps: Annotated[
+        int,
+        Field(
+            ge=0, description="Number of warmup steps for the learning rate scheduler."
+        ),
+    ] = 10
 
-    min_lr: Annotated[float, Field(ge=0, description="Minimum learning rate to converge to.")] = 0.0
+    min_lr: Annotated[
+        float, Field(ge=0, description="Minimum learning rate to converge to.")
+    ] = 0.0
 
 
-SchedulerConfigType: TypeAlias = ConstantSchedulerConfig | LinearSchedulerConfig | CosineSchedulerConfig
+SchedulerConfigType: TypeAlias = (
+    ConstantSchedulerConfig | LinearSchedulerConfig | CosineSchedulerConfig
+)
 
 
 class BaseOptimizerConfig(BaseModel):
     lr: Annotated[float, Field(ge=0)] = 1e-6
     weight_decay: Annotated[float, Field(ge=0)] = 0.01
-    max_norm: Annotated[float, Field(ge=0, description="Maximum gradient norm to clip.")] = 1.0
+    max_norm: Annotated[
+        float, Field(ge=0, description="Maximum gradient norm to clip.")
+    ] = 1.0
 
 
 class SGDConfig(BaseOptimizerConfig):
@@ -146,3 +164,63 @@ class MuonConfig(BaseOptimizerConfig):
 
 OptimizerConfigType: TypeAlias = SGDConfig | AdamWConfig | MuonConfig
 
+
+class LogExtrasConfig(BaseConfig):
+    """Configures extra logging for W&B tables."""
+
+    samples: Annotated[
+        bool,
+        Field(
+            description="Whether to log prompt/response samples to W&B tables.",
+        ),
+    ] = True
+
+    distributions: Annotated[
+        bool,
+        Field(
+            description="Whether to log distributions (like rewards, advantages, etc.) to W&B tables.",
+        ),
+    ] = True
+
+    interval: Annotated[
+        int,
+        Field(
+            ge=1,
+            description="Step interval at which to log extras to W&B table.",
+        ),
+    ] = 10
+
+
+class WandbMonitorConfig(BaseConfig):
+    """Configures logging to Weights and Biases."""
+
+    # Shared configs (May be overwritten by WandbConfig from `rl.py`)
+    project: Annotated[str, Field(description="The W&B project to log to.")] = (
+        "prime-rl"
+    )
+
+    name: Annotated[
+        str | None,
+        Field(
+            description="The W&B name to to use for logging.",
+        ),
+    ] = None
+
+    offline: Annotated[
+        bool, Field(description="Whether to run W&B in offline mode.")
+    ] = False
+
+    # Individual configs (can only be specified on trainer or orchestrator)
+    id: Annotated[
+        str | None,
+        Field(
+            description="The W&B run ID to log to. If None, a random ID will be generated. If you want to resume a run, you can set the ID to the run ID you want to resume.",
+        ),
+    ] = None
+
+    log_extras: Annotated[
+        LogExtrasConfig | None,
+        Field(
+            description="Configuration for logging extras to W&B tables. If None, no extras are logged.",
+        ),
+    ] = LogExtrasConfig()
