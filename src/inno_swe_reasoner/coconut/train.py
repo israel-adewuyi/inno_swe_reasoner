@@ -9,6 +9,7 @@ from inno_swe_reasoner.utils.logger import setup_logger
 from inno_swe_reasoner.optim import setup_optimizer
 from inno_swe_reasoner.coconut.coconut_utils import calculate_eot_offset
 from inno_swe_reasoner.utils.monitor import setup_monitor
+from inno_swe_reasoner.utils.ckpt import CheckpointManager
 from inno_swe_reasoner.coconut.data import (
     setup_dataset,
     setup_dataloader,
@@ -33,6 +34,11 @@ def train(config: CoconutTrainerConfig):
     logger.info(f"Initializing monitor ({config.wandb})")
     monitor = setup_monitor(
         config.wandb, output_dir=config.output_dir, run_config=config
+    )
+
+    # Setup the checkpoint manager
+    weightckpt_manager = CheckpointManager(
+        output_dir=config.output_dir, config=config.checkpoint
     )
 
     logger.info(f"Initializing optimizer ({config.optim})")
@@ -203,6 +209,8 @@ def train(config: CoconutTrainerConfig):
                 logger.success(step_message)
                 optimizer.step()
                 optimizer.zero_grad()
+
+        weightckpt_manager.save(model=model, step=step)
 
 
 def main():

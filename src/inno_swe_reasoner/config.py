@@ -224,3 +224,23 @@ class WandbMonitorConfig(BaseConfig):
             description="Configuration for logging extras to W&B tables. If None, no extras are logged.",
         ),
     ] = LogExtrasConfig()
+
+
+class WeightCheckpointConfig(BaseConfig):
+    """Configures checkpointing the full model, optimizer and training state for resuming training."""
+
+    interval: Annotated[
+        int | None,
+        Field(
+            ge=1,
+            description="Interval at which to save the training checkpoint. If None, will only checkpoint at the end of training.",
+        ),
+    ] = None
+
+    keep_last_n: Annotated[
+        int | None,
+        Field(
+            ge=1,
+            description="Number of previous checkpoints to keep",
+        ),
+    ] = None
