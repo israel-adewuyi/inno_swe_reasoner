@@ -22,6 +22,8 @@ class CoconutDataConfig(BaseConfig):
     shuffle: bool = True
     # batch size
     batch_size: int = 2
+    # if to use mock data
+    mock_data: bool = False
     # seed
     seed: int = 42
     # max epochs

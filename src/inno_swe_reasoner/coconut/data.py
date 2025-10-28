@@ -4,7 +4,7 @@ import json
 from typing import Dict, List, Optional
 from transformers import AutoTokenizer
 from torch.utils.data import DataLoader, IterableDataset
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 
 from inno_swe_reasoner.coconut.config import CoconutDataConfig
 from inno_swe_reasoner.utils.logger import get_logger
@@ -184,14 +184,14 @@ def setup_dataloader(
 def setup_dataset(config: CoconutDataConfig, tokenizer: AutoTokenizer) -> Dataset:
     logger = get_logger()
 
-    logger.info(f"Loading dataset from {config.name} split {config.split}...")
-    # dataset = load_dataset(config.name, split=config.split)
-    # Load the JSON file
-    with open("src/inno_swe_reasoner/coconut/mock_data.json", "r") as f:
-        data = json.load(f)
-
-    # Convert to HuggingFace Dataset
-    dataset = Dataset.from_list(data)
+    if not config.mock_data:
+        logger.info(f"Loading dataset from {config.name} split {config.split}...")
+        dataset = load_dataset(config.name, split=config.split)
+    else:
+        logger.info("Loading mock dataset here")
+        with open("src/inno_swe_reasoner/coconut/mock_data.json", "r") as f:
+            data = json.load(f)
+        dataset = Dataset.from_list(data)
     if config.num_samples is not None:
         dataset = dataset.take(config.num_samples)
         logger.info(f"Selected first {config.num_samples} samples from the dataset.")
