@@ -92,38 +92,6 @@ class SFTDataset(IterableDataset):
 
             return [_strip_content(message) for message in messages]
 
-        # def build_loss_mask(messages: list[dict], tokenizer) -> list[int]:
-        #     """
-        #     Build loss mask by incrementally tokenizing messages and using their loss_mask values.
-        #     """
-        #     loss_mask: list[int] = []
-        #     prev_ids, prev_len = [], 0
-
-        #     for i, message in enumerate(messages):
-        #         assert "role" in message, "Message must have a role"
-        #         assert "loss_mask" in message, "Message must have a loss_mask field"
-
-        #         # Tokenize up to current message
-        #         cur_ids = tokenizer.apply_chat_template(
-        #             messages[: i + 1],
-        #             add_generation_prompt=False,
-        #             **example.get("chat_template_kwargs", {}),
-        #         )
-
-        #         # Validate incremental tokenization
-        #         assert prev_ids == cur_ids[:prev_len], (
-        #             f"Mismatch in incremental tokenization at message {i}. "
-        #             f"Previous ids: {prev_ids} != {cur_ids[:prev_len]}"
-        #         )
-
-        #         # Extend loss mask with this message's mask value for all its tokens
-        #         num_new_tokens = len(cur_ids) - prev_len
-        #         loss_mask.extend([message["loss_mask"]] * num_new_tokens)
-
-        #         prev_ids, prev_len = cur_ids, len(cur_ids)
-
-        #     return loss_mask
-
         example = parse_messages(example)
         messages = strip_content(example["messages"])
 
@@ -139,26 +107,9 @@ class SFTDataset(IterableDataset):
             if self.shuffle
             else self.dataset
         )
-        while True:
+        for idx in range(self.num_examples):
             self.step += 1
-
-            # Determine epoch from current step
-            epoch = (self.step - 1) // self.num_examples
-
-            # Break if max epochs reached
-            if self.max_epochs is not None and epoch >= self.max_epochs:
-                break
-
-            # Update stored epoch if new epoch is reached, optionally shuffle
-            if epoch > self.epoch:
-                self.epoch = epoch
-                dataset = (
-                    self.dataset.shuffle(seed=self.epoch + self.seed)
-                    if self.shuffle
-                    else self.dataset
-                )
-
-            example = dataset[(self.step - 1) % self.num_examples]
+            example = dataset[idx]
 
             processed_example = self._process(example)
 
@@ -166,6 +117,33 @@ class SFTDataset(IterableDataset):
                 continue
 
             yield processed_example
+        # while True:
+        #     self.step += 1
+
+        #     # Determine epoch from current step
+        #     epoch = (self.step - 1) // self.num_examples
+
+        #     # Break if max epochs reached
+        #     if self.max_epochs is not None and epoch >= self.max_epochs:
+        #         break
+
+        #     # Update stored epoch if new epoch is reached, optionally shuffle
+        #     if epoch > self.epoch:
+        #         self.epoch = epoch
+        #         dataset = (
+        #             self.dataset.shuffle(seed=self.epoch + self.seed)
+        #             if self.shuffle
+        #             else self.dataset
+        #         )
+
+        #     example = dataset[(self.step - 1) % self.num_examples]
+
+        #     processed_example = self._process(example)
+
+        #     if processed_example is None:
+        #         continue
+
+        #     yield processed_example
 
 
 def collate_fn(batch: List[Dict]) -> Dict[str, List]:
