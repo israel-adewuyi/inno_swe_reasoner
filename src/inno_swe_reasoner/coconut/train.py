@@ -202,6 +202,7 @@ def train(config: CoconutTrainerConfig):
                     "timing/examples_per_sec": len(batch["prompt"]) / step_time,
                     "training/stage": stage,
                     "training/batch_size": len(batch["prompt"]),
+                    "step": step,
                 }
 
                 monitor.log(log_metrics)
