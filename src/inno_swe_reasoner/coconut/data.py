@@ -80,8 +80,9 @@ class SFTDataset(IterableDataset):
             )
 
         # messages is string-ified list of dicts, parse it
-        def parse_messages(example):
-            example["messages"] = json.loads(example["messages"])
+        def parse_messages(example: str | list[dict]):
+            if isinstance(example, str):
+                example["messages"] = json.loads(example["messages"])
             return example
 
         def strip_content(messages: list[dict]) -> list[dict]:
@@ -186,7 +187,9 @@ def setup_dataset(config: CoconutDataConfig, tokenizer: AutoTokenizer) -> Datase
 
     if not config.mock_data:
         logger.info(f"Loading dataset from {config.name} split {config.split}...")
-        dataset = load_dataset(config.name, "solutions_w_editorials_decontaminated")
+        dataset = load_dataset(config.name, "solutions_w_editorials_decontaminated")[
+            "train"
+        ]
     else:
         logger.info("Loading mock dataset here")
         with open("src/inno_swe_reasoner/coconut/mock_data.json", "r") as f:
