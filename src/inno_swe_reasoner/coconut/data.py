@@ -79,6 +79,16 @@ class SFTDataset(IterableDataset):
                 "All examples must have a 'messages' column for SFT training."
             )
 
+        if "api_metadata" in example:
+            self.logger.debug(
+                f"Total tokens: {example['api_metadata']['total_tokens']}\n\n"
+            )
+            if example["api_metadata"]["total_tokens"] > self.seq_len:
+                self.logger.debug(
+                    "Total tokens is greater than seq_len, skipping example\n\n"
+                )
+                return None
+
         # messages is string-ified list of dicts, parse it
         def parse_messages(example: str | list[dict]):
             if isinstance(example, str):
