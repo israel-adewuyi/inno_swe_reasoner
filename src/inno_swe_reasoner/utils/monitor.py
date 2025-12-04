@@ -280,7 +280,7 @@ class WandbMonitor:
 _MONITOR: WandbMonitor | None = None
 
 
-def get_wandb_monitor() -> WandbMonitor:
+def get_monitor() -> WandbMonitor:
     """Returns the global monitor."""
     global _MONITOR
     if _MONITOR is None:
@@ -290,7 +290,7 @@ def get_wandb_monitor() -> WandbMonitor:
     return _MONITOR
 
 
-def setup_wandb_monitor(
+def setup_monitor(
     config: WandbMonitorConfig | None,
     output_dir: Path | None = None,
     tokenizer: PreTrainedTokenizer | None = None,
@@ -614,7 +614,7 @@ class TensorBoardMonitor:
 _TB_MONITOR: TensorBoardMonitor | None = None
 
 
-def get_monitor() -> TensorBoardMonitor:
+def get_tb_monitor() -> TensorBoardMonitor:
     """Returns the global TensorBoard monitor."""
     global _TB_MONITOR
     if _TB_MONITOR is None:
@@ -624,7 +624,7 @@ def get_monitor() -> TensorBoardMonitor:
     return _TB_MONITOR
 
 
-def setup_monitor(
+def setup_tb_monitor(
     config: WandbMonitorConfig | None,
     output_dir: Path | None = None,
     tokenizer: PreTrainedTokenizer | None = None,
