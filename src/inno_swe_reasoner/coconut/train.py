@@ -91,7 +91,7 @@ def train(config: CoconutTrainerConfig):
                             .unsqueeze(0)
                             .to("cuda")
                         )
-
+                        logger.info(f"Input IDs shape: {input_ids.shape}")
                         assert input_ids.shape == target_ids.shape == loss_mask.shape, (
                             f"input_ids, loss_mask and target_ids must have the same length, but got {input_ids.shape=}, {loss_mask.shape=}, {target_ids.shape=}"
                         )
