@@ -1,0 +1,14 @@
+[model]
+name = "Qwen/Qwen2.5-0.5B-Instruct"
+
+[data]
+name = "open-r1/codeforces-cots"
+split = "solutions_w_editorials_decontaminated"
+num_samples = 2
+
+[wandb]
+project = "DEMO"
+name = "demo_with_small_model"
+
+[checkpoint]
+interval = 1

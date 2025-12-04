@@ -9,6 +9,7 @@ dependencies = [
     "hf-transfer>=0.1.9",
     "jaxtyping>=0.3.3",
     "loguru>=0.7.3",
+    "nvitop>=1.6.0",
     "pydantic>=2.12.3",
     "pydantic-settings>=2.11.0",
     "tensorboard>=2.20.0",
