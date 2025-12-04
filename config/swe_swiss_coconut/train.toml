@@ -2,13 +2,13 @@
 name = "Qwen/Qwen3-0.6B"
 
 [data]
-name = "SWE-Swiss/SWESwiss-SFT-Repair-4K"
-split = "train"
-mock_data = false
+name = "open-r1/codeforces-cots"
+split = "solutions_w_editorials_decontaminated"
 num_samples = 2
 
 [wandb]
-project = "demo_with_small_model"
+project = "DEMO"
+name = "demo_with_small_model"
 
 [checkpoint]
 interval = 1

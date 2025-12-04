@@ -186,7 +186,7 @@ def setup_dataset(config: CoconutDataConfig, tokenizer: AutoTokenizer) -> Datase
 
     if not config.mock_data:
         logger.info(f"Loading dataset from {config.name} split {config.split}...")
-        dataset = load_dataset(config.name, split=config.split)
+        dataset = load_dataset(config.name, "solutions_w_editorials_decontaminated")
     else:
         logger.info("Loading mock dataset here")
         with open("src/inno_swe_reasoner/coconut/mock_data.json", "r") as f:

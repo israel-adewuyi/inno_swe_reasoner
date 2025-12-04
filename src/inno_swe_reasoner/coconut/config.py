@@ -14,6 +14,7 @@ class CoconutDataConfig(BaseConfig):
     name: str = "coconut_sft_dataset"
     # Split to use
     split: str = "train"
+    subset: str | None = None
     # Maximum sequence length
     max_seq_length: int = 65536
     # Number of samples to use (for debugging, None means all)
