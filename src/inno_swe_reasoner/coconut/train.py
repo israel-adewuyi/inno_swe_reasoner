@@ -1,20 +1,21 @@
 import time
-import torch
 
+import torch
 from torch.nn.functional import cross_entropy
-from inno_swe_reasoner.coconut.config import CoconutTrainerConfig
-from inno_swe_reasoner.utils.pydantic_config import parse_argv
-from inno_swe_reasoner.coconut.model import setup_model, setup_tokenizer
-from inno_swe_reasoner.utils.logger import setup_logger
-from inno_swe_reasoner.optim import setup_optimizer
+
 from inno_swe_reasoner.coconut.coconut_utils import calculate_eot_offset
-from inno_swe_reasoner.utils.monitor import setup_monitor
-from inno_swe_reasoner.utils.ckpt import CheckpointManager
+from inno_swe_reasoner.coconut.config import CoconutTrainerConfig
 from inno_swe_reasoner.coconut.data import (
-    setup_dataset,
     setup_dataloader,
+    setup_dataset,
     tokenize_data,
 )
+from inno_swe_reasoner.coconut.model import setup_model, setup_tokenizer
+from inno_swe_reasoner.optim import setup_optimizer
+from inno_swe_reasoner.utils.ckpt import CheckpointManager
+from inno_swe_reasoner.utils.logger import setup_logger
+from inno_swe_reasoner.utils.monitor import setup_monitor
+from inno_swe_reasoner.utils.pydantic_config import parse_argv
 
 
 def train(config: CoconutTrainerConfig):
@@ -72,6 +73,9 @@ def train(config: CoconutTrainerConfig):
                     zip(batch["prompt"], batch["cot_steps"], batch["answer"])
                 ):
                     # Determine how many steps to replace with continuous thoughts
+                    # logger.info(f"Prompt: {prompt}\n\n")
+                    # logger.info(f"Cot steps: {cot_steps}\n\n")
+                    # logger.info(f"Answer: {answer}\n\n")
                     steps_to_replace = min(stage, len(cot_steps))
                     num_continuous_thoughts = steps_to_replace * config.data.c
                     remaining_cot = cot_steps[steps_to_replace:]
@@ -120,6 +124,7 @@ def train(config: CoconutTrainerConfig):
 
                         # Generate continuous thoughts
                         num_continuous_thoughts = 2  # TODO: Remove this later.
+                        logger.info(f"Shape of input_embed: {input_embed.shape}")
                         for i in range(num_continuous_thoughts):
                             hidden_states = model.forward_from_embeddings(
                                 input_embed, None, True
