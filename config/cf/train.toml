@@ -1,14 +1,14 @@
 [model]
-name = "Qwen/Qwen2.5-1.5B-Instruct"
+name = "Qwen/Qwen2.5-0.5B-Instruct"
 
 [data]
 name = "open-r1/codeforces-cots"
 split = "solutions_w_editorials_decontaminated"
-max_seq_length = 1536
+max_seq_length = 4096
 
 [wandb]
 project = "DEMO"
-name = "demo_with_small_model_1.5B"
+name = "demo_with_small_model_0.5B_4096_toks_mp"
 
 [checkpoint]
 interval = 1
