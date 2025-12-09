@@ -1,10 +1,17 @@
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field
-from typing import Annotated
+
+from inno_swe_reasoner.config import (
+    AdamWConfig,
+    CoconutEvalConfig,
+    ModelConfig,
+    OptimizerConfigType,
+    WandbMonitorConfig,
+    WeightCheckpointConfig,
+)
 from inno_swe_reasoner.utils.pydantic_config import BaseConfig, BaseSettings
-from inno_swe_reasoner.config import ModelConfig, AdamWConfig, OptimizerConfigType
-from inno_swe_reasoner.config import WandbMonitorConfig, WeightCheckpointConfig
 
 
 class CoconutDataConfig(BaseConfig):
@@ -54,6 +61,8 @@ class CoconutTrainerConfig(BaseSettings):
 
     # The weight checkpoint configuration
     checkpoint: WeightCheckpointConfig | None = None
+
+    eval: CoconutEvalConfig | None = None
 
     output_dir: Annotated[
         Path,

@@ -11,6 +11,7 @@ from inno_swe_reasoner.coconut.data import (
     setup_dataset,
     tokenize_data,
 )
+from inno_swe_reasoner.coconut.eval import CoconutEvaluator
 from inno_swe_reasoner.coconut.model import setup_model, setup_tokenizer
 from inno_swe_reasoner.optim import setup_optimizer
 from inno_swe_reasoner.utils.ckpt import CheckpointManager
@@ -43,6 +44,8 @@ def train(config: CoconutTrainerConfig):
         output_dir=config.output_dir, config=config.checkpoint
     )
 
+    evaluator = CoconutEvaluator(config.eval, config.output_dir)
+
     logger.info(f"Initializing optimizer ({config.optim})")
     optimizer = setup_optimizer(config.optim, model)
 
@@ -56,6 +59,8 @@ def train(config: CoconutTrainerConfig):
     # COCONUT Training
     step = 0
     for stage in range(config.data.num_stages + 1):
+        evaluator.eval(0)
+        break
         if stage > 0:
             logger.info(f"Resetting optimizer at Stage {stage}")
             optimizer = setup_optimizer(config.optim, model)

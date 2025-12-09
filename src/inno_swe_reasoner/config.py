@@ -191,6 +191,18 @@ class LogExtrasConfig(BaseConfig):
     ] = 10
 
 
+class CoconutEvalConfig(BaseConfig):
+    """Configures necessary parameters for evaluation on LiveCodeBench"""
+
+    model_name: Annotated[str | None, Field(description="Name of the model on HF")] = (
+        None
+    )
+
+    lcb_release: Annotated[
+        str | None, Field(description="The version of LCB to load for evaluation")
+    ] = None
+
+
 class WandbMonitorConfig(BaseConfig):
     """Configures logging to Weights and Biases."""
 
