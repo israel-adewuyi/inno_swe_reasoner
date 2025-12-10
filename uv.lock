@@ -546,6 +546,7 @@ dependencies = [
     { name = "tomli" },
     { name = "tomli-w" },
     { name = "torch" },
+    { name = "tqdm" },
     { name = "transformers" },
     { name = "wandb" },
 ]
@@ -569,6 +570,7 @@ requires-dist = [
     { name = "tomli", specifier = ">=2.3.0" },
     { name = "tomli-w", specifier = ">=1.2.0" },
     { name = "torch", specifier = ">=2.9.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
     { name = "transformers", specifier = ">=4.57.1" },
     { name = "wandb", specifier = ">=0.22.2" },
 ]

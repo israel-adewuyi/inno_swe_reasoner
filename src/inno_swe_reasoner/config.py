@@ -1,5 +1,6 @@
 # Adapted from from https://github.com/PrimeIntellect-ai/prime-rl/blob/main/src/prime_rl/trainer/config.py
 
+from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, Field, model_validator
@@ -198,8 +199,29 @@ class CoconutEvalConfig(BaseConfig):
         None
     )
 
-    lcb_release: Annotated[
+    dataset_name: Annotated[
+        str | None, Field(description="Exact name of the dataset to use")
+    ]
+
+    lcb_version: Annotated[
         str | None, Field(description="The version of LCB to load for evaluation")
+    ] = None
+
+    output_dir: Annotated[
+        Path | None,
+        Field(description="File path where code completions should be saved.s"),
+    ] = Path("outputs")
+
+    temperature: Annotated[
+        float, Field(description="the temperature for sampling from the model")
+    ] = 0.7
+
+    max_new_tokens: Annotated[
+        int, Field(description="The maximum number of tokens to sample from the model")
+    ] = 1024
+
+    num_samples: Annotated[
+        int | None, Field(description="The number of samples to process")
     ] = None
 
 

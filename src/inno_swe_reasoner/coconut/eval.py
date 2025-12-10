@@ -1,11 +1,54 @@
+import json
 from pathlib import Path
 
+import torch
 from datasets import load_dataset
+from huggingface_hub import hf_hub_download
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from inno_swe_reasoner.config import CoconutEvalConfig
 from inno_swe_reasoner.utils.logger import get_logger
 from inno_swe_reasoner.utils.utils import get_ckpt_dir
+
+# From: https://huggingface.co/datasets/livecodebench/code_generation_lite/blob/main/code_generation_lite.py
+ALLOWED_FILES = {
+    "v1": ["test.jsonl"],
+    "v2": ["test.jsonl", "test2.jsonl"],
+    "v3": ["test.jsonl", "test2.jsonl", "test3.jsonl"],
+    "v4": ["test.jsonl", "test2.jsonl", "test3.jsonl", "test4.jsonl"],
+    "v5": [
+        "test.jsonl",
+        "test2.jsonl",
+        "test3.jsonl",
+        "test4.jsonl",
+        "test5.jsonl",
+    ],
+    "v6": [
+        "test.jsonl",
+        "test2.jsonl",
+        "test3.jsonl",
+        "test4.jsonl",
+        "test5.jsonl",
+        "test6.jsonl",
+    ],
+}
+
+USER_PROMPT = """### Question
+
+{question}
+
+### Format
+
+Read the inputs from stdin solve the problem and write the answer to stdout (do not directly test on the sample inputs). Enclose your code within delimiters as follows. Ensure that when the python program runs, it reads the inputs, runs the algorithm and writes output to STDOUT."
+
+```python
+# YOUR CODE HERE
+```
+
+### Answer (use the provided format with backticks)
+
+"""
 
 
 class CoconutEvaluator:
@@ -13,6 +56,7 @@ class CoconutEvaluator:
         self.config = config
         self.logger = get_logger()
         self.ckpt_dir = get_ckpt_dir(output_dir)
+        self.dataset = self.load_lcb_dataset()
 
     def get_ckpt_path(self, step: int) -> Path:
         return self.ckpt_dir / f"step_{step}" / "trainer"
@@ -35,17 +79,122 @@ class CoconutEvaluator:
 
     def load_lcb_dataset(self):
         self.logger.info("Loading LCB dataset for evaluation")
-        dataset = load_dataset(
-            "livecodebench/code_generation_lite", split=self.config.lcb_release
+        version = self.config.lcb_version
+        if version not in ALLOWED_FILES:
+            raise ValueError(
+                f"Invalid version: {version}. Must be one of {list(ALLOWED_FILES.keys())}"
+            )
+
+        file_paths = [
+            hf_hub_download(
+                repo_id=self.config.dataset_name,
+                filename=jsonl_file,
+                repo_type="dataset",
+            )
+            for jsonl_file in ALLOWED_FILES[version]
+        ]
+
+        dataset = load_dataset("json", data_files=file_paths)["train"]
+
+        def process_example(example):
+            prompt = USER_PROMPT.format(
+                question=example["question_content"],
+            )
+
+            metadata = (
+                json.loads(example["metadata"])
+                if isinstance(example["metadata"], str)
+                else example["metadata"]
+            )
+
+            return {
+                "question_id": example["question_id"],
+                "prompt": prompt,
+                "public_test_cases": example["public_test_cases"],
+                "private_test_cases": example["private_test_cases"],
+                "starter_code": example.get("starter_code", ""),
+                "platform": example["platform"],
+                "difficulty": example.get("difficulty", "unknown"),
+                "fn_name": metadata.get("func_name"),
+                "contest_date": example["contest_date"],
+            }
+
+        processed_dataset = dataset.map(
+            process_example, remove_columns=dataset.column_names
         )
-        return dataset
+        if self.config.num_samples is not None:
+            processed_dataset = processed_dataset.select(
+                range(min(self.config.num_samples, len(processed_dataset)))
+            )
+        self.logger.info(
+            f"Loaded {len(processed_dataset)} problems from LiveCodeBench {version}"
+        )
+
+        return processed_dataset
+
+    def generate_sample(
+        self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer, prompt: str
+    ) -> str:
+        """Generate a single sample from the model (no batching)."""
+        # Format prompt for Qwen chat format
+        messages = [{"role": "user", "content": prompt}]
+        formatted_prompt = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+
+        # Tokenize
+        inputs = tokenizer(formatted_prompt, return_tensors="pt").to("cuda")
+
+        # Generate
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=self.config.max_new_tokens,
+                temperature=self.config.temperature,
+                do_sample=self.config.temperature > 0,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+
+        # Decode only the generated part
+        generated_ids = outputs[0][inputs.input_ids.shape[1] :]
+        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+
+        return generated_text
 
     def eval(self, step: int):
         # Load model and tokenizer
         model = self.load_model(step).eval().to("cuda")
-        # tokenizer = self.load_tokenizer()
+        tokenizer = self.load_tokenizer()
 
-        # Load dataset
-        # dataset = self.load_lcb_dataset()
+        results_dir = self.config.output_dir / "eval_results" / f"step_{step}"
+        results_dir.mkdir(parents=True, exist_ok=True)
 
-        return model
+        results = []
+        for idx, example in enumerate(tqdm(self.dataset, desc="Evaluating")):
+            generated_solution = self.generate_sample(
+                model, tokenizer, example["prompt"]
+            )
+
+            result = {
+                "question_id": example["question_id"],
+                "prompt": example["prompt"],
+                "generated_solution": generated_solution,
+                "public_test_cases": example["public_test_cases"],
+                "private_test_cases": example["private_test_cases"],
+                "fn_name": example["fn_name"],
+                "platform": example["platform"],
+                "difficulty": example["difficulty"],
+            }
+            results.append(result)
+
+        self._save_results(results, results_dir / "results_final.jsonl")
+        self.logger.info(f"Evaluation complete. Results saved to {results_dir}")
+
+        return results
+
+    def _save_results(self, results: list, output_path: Path):
+        """Save results to JSONL file."""
+        with open(output_path, "w") as f:
+            for result in results:
+                f.write(json.dumps(result) + "\n")

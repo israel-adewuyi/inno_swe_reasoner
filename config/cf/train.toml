@@ -15,4 +15,6 @@ interval = 1
 
 [eval]
 model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-
+dataset_name = "livecodebench/code_generation_lite"
+lcb_version = "v6"
+num_samples = 256
