@@ -220,6 +220,10 @@ class CoconutEvalConfig(BaseConfig):
         int, Field(description="The maximum number of tokens to sample from the model")
     ] = 1024
 
+    num_completions: Annotated[
+        int, Field(description="Number of completions to sample per prompt")
+    ] = 1
+
     num_samples: Annotated[
         int | None, Field(description="The number of samples to process")
     ] = None

@@ -132,10 +132,14 @@ class CoconutEvaluator:
 
         return processed_dataset
 
-    def generate_sample(
-        self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer, prompt: str
-    ) -> str:
-        """Generate a single sample from the model (no batching)."""
+    def generate_samples(
+        self,
+        model: AutoModelForCausalLM,
+        tokenizer: AutoTokenizer,
+        prompt: str,
+        num_completions: int,
+    ) -> list[str]:
+        """Generate one or more samples from the model (no batching)."""
         # Format prompt for Qwen chat format
         messages = [{"role": "user", "content": prompt}]
         formatted_prompt = tokenizer.apply_chat_template(
@@ -152,15 +156,21 @@ class CoconutEvaluator:
                 max_new_tokens=self.config.max_new_tokens,
                 temperature=self.config.temperature,
                 do_sample=self.config.temperature > 0,
+                num_return_sequences=num_completions,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
             )
 
-        # Decode only the generated part
-        generated_ids = outputs[0][inputs.input_ids.shape[1] :]
-        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+        # Decode only the generated part for each sequence
+        input_len = inputs.input_ids.shape[1]
+        generated_texts = []
+        for seq in outputs:
+            generated_ids = seq[input_len:]
+            generated_texts.append(
+                tokenizer.decode(generated_ids, skip_special_tokens=True)
+            )
 
-        return generated_text
+        return generated_texts
 
     def eval(self, step: int):
         # Load model and tokenizer
@@ -171,30 +181,25 @@ class CoconutEvaluator:
         results_dir.mkdir(parents=True, exist_ok=True)
 
         results = []
-        for idx, example in enumerate(tqdm(self.dataset, desc="Evaluating")):
-            generated_solution = self.generate_sample(
-                model, tokenizer, example["prompt"]
+        for example in tqdm(self.dataset, desc="Evaluating"):
+            generated_solutions = self.generate_samples(
+                model,
+                tokenizer,
+                example["prompt"],
+                num_completions=self.config.num_completions,
             )
-
             result = {
                 "question_id": example["question_id"],
-                "prompt": example["prompt"],
-                "generated_solution": generated_solution,
-                "public_test_cases": example["public_test_cases"],
-                "private_test_cases": example["private_test_cases"],
-                "fn_name": example["fn_name"],
-                "platform": example["platform"],
-                "difficulty": example["difficulty"],
+                "code_list": generated_solutions,
             }
             results.append(result)
 
-        self._save_results(results, results_dir / "results_final.jsonl")
+        self._save_results(results, results_dir / "results_final.json")
         self.logger.info(f"Evaluation complete. Results saved to {results_dir}")
 
         return results
 
     def _save_results(self, results: list, output_path: Path):
-        """Save results to JSONL file."""
+        """Save results to JSON file."""
         with open(output_path, "w") as f:
-            for result in results:
-                f.write(json.dumps(result) + "\n")
+            json.dump(results, f, indent=2)
