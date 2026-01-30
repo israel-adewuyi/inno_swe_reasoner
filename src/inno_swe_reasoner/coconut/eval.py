@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import torch
@@ -8,6 +9,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from inno_swe_reasoner.config import CoconutEvalConfig
+from inno_swe_reasoner.coconut.lcb_eval import run_lcb_custom_evaluator
 from inno_swe_reasoner.utils.logger import get_logger
 from inno_swe_reasoner.utils.utils import get_ckpt_dir
 
@@ -57,6 +59,14 @@ class CoconutEvaluator:
         self.logger = get_logger()
         self.ckpt_dir = get_ckpt_dir(output_dir)
         self.dataset = self.load_lcb_dataset()
+
+    @staticmethod
+    def _extract_code_block(text: str) -> str:
+        """Best-effort extraction of python code inside triple backticks."""
+        match = re.search(r"```(?:python)?\s*(.*?)```", text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return text.strip()
 
     def get_ckpt_path(self, step: int) -> Path:
         return self.ckpt_dir / f"step_{step}" / "trainer"
@@ -166,9 +176,8 @@ class CoconutEvaluator:
         generated_texts = []
         for seq in outputs:
             generated_ids = seq[input_len:]
-            generated_texts.append(
-                tokenizer.decode(generated_ids, skip_special_tokens=True)
-            )
+            generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+            generated_texts.append(self._extract_code_block(generated_text))
 
         return generated_texts
 
@@ -194,7 +203,14 @@ class CoconutEvaluator:
             }
             results.append(result)
 
-        self._save_results(results, results_dir / "results_final.json")
+        output_path = results_dir / "results_final.json"
+        self._save_results(results, output_path)
+        if self.config.lcb_custom_evaluate:
+            run_lcb_custom_evaluator(
+                output_path,
+                evaluator_module=self.config.lcb_custom_evaluator_module,
+                extra_args=self.config.lcb_custom_eval_args,
+            )
         self.logger.info(f"Evaluation complete. Results saved to {results_dir}")
 
         return results

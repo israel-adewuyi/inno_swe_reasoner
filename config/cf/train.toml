@@ -18,3 +18,6 @@ model_name = "Qwen/Qwen2.5-0.5B-Instruct"
 dataset_name = "livecodebench/code_generation_lite"
 lcb_version = "v6"
 num_samples = 256
+lcb_custom_evaluate = true
+lcb_custom_evaluator_module = "lcb_runner.runner.custom_evaluator"
+lcb_custom_eval_args = ["--release_version", "v6"]

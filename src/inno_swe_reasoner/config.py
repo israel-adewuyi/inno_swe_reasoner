@@ -224,6 +224,31 @@ class CoconutEvalConfig(BaseConfig):
         int, Field(description="Number of completions to sample per prompt")
     ] = 1
 
+    lcb_custom_evaluate: Annotated[
+        bool,
+        Field(
+            description="Whether to run LiveCodeBench custom evaluator on saved outputs"
+        ),
+    ] = False
+
+    lcb_custom_evaluator_module: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Python module path for LiveCodeBench custom evaluator "
+                "(e.g., lcb_runner.runner.custom_evaluator or "
+                "livecodebench.runner.custom_evaluator). If None, try common defaults."
+            )
+        ),
+    ] = None
+
+    lcb_custom_eval_args: Annotated[
+        list[str],
+        Field(
+            description="Extra CLI args to pass to the LiveCodeBench custom evaluator"
+        ),
+    ] = []
+
     num_samples: Annotated[
         int | None, Field(description="The number of samples to process")
     ] = None
