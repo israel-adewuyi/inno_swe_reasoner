@@ -15,6 +15,18 @@ def _find_first_available_module(module_names: list[str]) -> str | None:
     return None
 
 
+def _find_repo_root_from_spec(module_name: str) -> Path | None:
+    spec = importlib.util.find_spec(module_name)
+    if spec is None or spec.origin is None:
+        return None
+    module_path = Path(spec.origin).resolve()
+    # Walk up to find the lcb_runner package, then use its parent as repo root.
+    for parent in module_path.parents:
+        if (parent / "lcb_runner").is_dir():
+            return parent
+    return module_path.parent
+
+
 def run_lcb_custom_evaluator(
     custom_output_file: Path,
     evaluator_module: str | None = None,
@@ -36,6 +48,7 @@ def run_lcb_custom_evaluator(
             "LiveCodeBench custom evaluator module not found. "
             "Install LiveCodeBench and/or set lcb_custom_evaluator_module in config."
         )
+    repo_root = _find_repo_root_from_spec(module_name)
 
     cmd = [
         sys.executable,
@@ -49,4 +62,4 @@ def run_lcb_custom_evaluator(
 
     logger.info("Running LiveCodeBench custom evaluator...")
     logger.info("Command: %s", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, cwd=repo_root)
