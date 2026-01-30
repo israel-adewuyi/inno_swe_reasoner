@@ -16,7 +16,7 @@ from inno_swe_reasoner.coconut.model import setup_model, setup_tokenizer
 from inno_swe_reasoner.optim import setup_optimizer
 from inno_swe_reasoner.utils.ckpt import CheckpointManager
 from inno_swe_reasoner.utils.logger import setup_logger
-from inno_swe_reasoner.utils.monitor import setup_monitor
+from inno_swe_reasoner.utils.monitor import setup_tb_monitor
 from inno_swe_reasoner.utils.pydantic_config import parse_argv
 
 
@@ -35,7 +35,7 @@ def train(config: CoconutTrainerConfig):
 
     # Setup the monitor
     logger.info(f"Initializing monitor ({config.wandb})")
-    monitor = setup_monitor(
+    monitor = setup_tb_monitor(
         config.wandb, output_dir=config.output_dir, run_config=config
     )
 
