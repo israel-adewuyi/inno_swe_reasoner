@@ -18,6 +18,17 @@ from inno_swe_reasoner.utils.logger import get_logger
 from inno_swe_reasoner.utils.pydantic_config import BaseSettings
 
 
+def _tb_coerce_hparam_value(value: Any) -> Any:
+    if isinstance(value, (int, float, str, bool, torch.Tensor)):
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    try:
+        return json.dumps(value, default=str)
+    except TypeError:
+        return str(value)
+
+
 class WandbMonitor:
     """Logs to Weights and Biases."""
 
@@ -341,7 +352,9 @@ class TensorBoardMonitor:
 
         # Log hyperparameters if provided
         if run_config:
-            self.writer.add_hparams(run_config.model_dump(), metric_dict={})
+            hparams = run_config.model_dump()
+            safe_hparams = {k: _tb_coerce_hparam_value(v) for k, v in hparams.items()}
+            self.writer.add_hparams(safe_hparams, metric_dict={})
 
         # Optionally, initialize sample logging attributes
         if config is not None and config.log_extras:
