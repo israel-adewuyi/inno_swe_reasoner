@@ -49,7 +49,7 @@ def run_lcb_custom_evaluator(
             "Install LiveCodeBench and/or set lcb_custom_evaluator_module in config."
         )
     repo_root = _find_repo_root_from_spec(module_name)
-
+    custom_output_file = custom_output_file.resolve()
     cmd = [
         sys.executable,
         "-m",
