@@ -84,6 +84,7 @@ class CoconutEvaluator:
 
     def load_tokenizer(self) -> AutoTokenizer:
         tokenizer = AutoTokenizer.from_pretrained(self.config.model_name)
+        tokenizer.padding_side = "left"
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
