@@ -4,11 +4,12 @@ name = "Qwen/Qwen2.5-0.5B-Instruct"
 [data]
 name = "open-r1/codeforces-cots"
 split = "solutions_w_editorials_decontaminated"
-max_seq_length = 1024
+max_seq_length = 2048
+batch_size = 8
 
 [wandb]
-project = "DEMO"
-name = "demo_1"
+project = "qwen0.5B"
+name = "seq_len=2048_num_stages=3"
 
 [checkpoint]
 interval = 1
@@ -21,3 +22,5 @@ num_samples = 256
 lcb_custom_evaluate = true
 lcb_custom_evaluator_module = "lcb_runner.runner.custom_evaluator"
 lcb_custom_eval_args = ["--release_version", "v6"]
+max_new_tokens = 4096
+eval_batch_size = 128
