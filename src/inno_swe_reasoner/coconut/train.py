@@ -44,7 +44,14 @@ def train(config: CoconutTrainerConfig):
         output_dir=config.output_dir, config=config.checkpoint
     )
 
-    evaluator = CoconutEvaluator(config.eval, config.output_dir)
+    eval_run_name = None
+    if config.wandb is not None:
+        eval_run_name = config.wandb.name
+    evaluator = CoconutEvaluator(
+        config.eval,
+        config.output_dir,
+        run_name=eval_run_name,
+    )
 
     logger.info(f"Initializing optimizer ({config.optim})")
     optimizer = setup_optimizer(config.optim, model)

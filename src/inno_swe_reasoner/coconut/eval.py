@@ -54,11 +54,12 @@ Read the inputs from stdin solve the problem and write the answer to stdout (do 
 
 
 class CoconutEvaluator:
-    def __init__(self, config: CoconutEvalConfig, output_dir):
+    def __init__(self, config: CoconutEvalConfig, output_dir, run_name: str | None = None):
         self.config = config
         self.logger = get_logger()
         self.ckpt_dir = get_ckpt_dir(output_dir)
         self.dataset = self.load_lcb_dataset()
+        self.run_name = run_name
 
     @staticmethod
     def _extract_code_block(text: str) -> str:
@@ -186,7 +187,10 @@ class CoconutEvaluator:
         model = self.load_model(step).eval().to("cuda")
         tokenizer = self.load_tokenizer()
 
-        results_dir = self.config.output_dir / "eval_results" / f"step_{step}"
+        results_dir = self.config.output_dir / "eval_results"
+        if self.run_name:
+            results_dir = results_dir / self.run_name
+        results_dir = results_dir / f"step_{step}"
         results_dir.mkdir(parents=True, exist_ok=True)
 
         results = []
