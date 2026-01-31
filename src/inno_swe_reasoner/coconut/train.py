@@ -1,8 +1,10 @@
 import time
+from contextlib import nullcontext
 
 import torch
 from torch.cuda.amp import autocast
 from torch.nn.functional import cross_entropy
+from torch.profiler import ProfilerActivity, profile, schedule, tensorboard_trace_handler
 
 from inno_swe_reasoner.coconut.coconut_utils import calculate_eot_offset
 from inno_swe_reasoner.coconut.config import CoconutTrainerConfig
@@ -65,14 +67,34 @@ def train(config: CoconutTrainerConfig):
 
     # COCONUT Training
     step = 0
-    did_eval_at_start = False
-    for stage in range(config.data.num_stages + 1):
-        if not did_eval_at_start:
-            evaluator.eval(step)
-            did_eval_at_start = True
-        if stage > 0:
-            logger.info(f"Resetting optimizer at Stage {stage}")
-            optimizer = setup_optimizer(config.optim, model)
+    evaluator.eval(step)
+
+    profiler_enabled = config.profiler is not None and config.profiler.enabled
+    profiler_ctx = nullcontext()
+    if profiler_enabled:
+        output_dir = config.profiler.output_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        activities = [ProfilerActivity.CPU]
+        if torch.cuda.is_available():
+            activities.append(ProfilerActivity.CUDA)
+        profiler_ctx = profile(
+            activities=activities,
+            schedule=schedule(
+                wait=config.profiler.wait,
+                warmup=config.profiler.warmup,
+                active=config.profiler.active,
+                repeat=config.profiler.repeat,
+            ),
+            record_shapes=True,
+            profile_memory=True,
+            on_trace_ready=tensorboard_trace_handler(str(output_dir)),
+        )
+
+    with profiler_ctx as prof:
+        for stage in range(config.data.num_stages + 1):
+            if stage > 0:
+                logger.info(f"Resetting optimizer at Stage {stage}")
+                optimizer = setup_optimizer(config.optim, model)
 
         for epochs in range(config.data.epoch_per_stage):
             logger.info(f"Starting epoch {epochs} at stage {stage}")
@@ -244,9 +266,11 @@ def train(config: CoconutTrainerConfig):
                 logger.success(step_message)
                 optimizer.step()
                 optimizer.zero_grad()
+                if profiler_enabled and prof is not None:
+                    prof.step()
 
-        weightckpt_manager.save(model=model, step=step)
-        evaluator.eval(step)
+            weightckpt_manager.save(model=model, step=step)
+            evaluator.eval(step)
 
 
 def main():

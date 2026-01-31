@@ -11,6 +11,14 @@ batch_size = 8
 project = "qwen0.5B"
 name = "seq_len=2048_num_stages=3"
 
+[profiler]
+enabled = true
+wait = 0
+warmup = 1
+active = 3
+repeat = 1
+output_dir = "outputs/profiler"
+
 [checkpoint]
 interval = 1
 

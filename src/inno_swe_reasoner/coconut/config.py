@@ -8,6 +8,7 @@ from inno_swe_reasoner.config import (
     CoconutEvalConfig,
     ModelConfig,
     OptimizerConfigType,
+    ProfilerConfig,
     WandbMonitorConfig,
     WeightCheckpointConfig,
 )
@@ -58,6 +59,8 @@ class CoconutTrainerConfig(BaseSettings):
 
     # The wandb configuration
     wandb: WandbMonitorConfig | None = None
+
+    profiler: ProfilerConfig | None = None
 
     # The weight checkpoint configuration
     checkpoint: WeightCheckpointConfig | None = None

@@ -293,6 +293,23 @@ class WandbMonitorConfig(BaseConfig):
     ] = LogExtrasConfig()
 
 
+class ProfilerConfig(BaseConfig):
+    """Configures PyTorch profiler."""
+
+    enabled: Annotated[
+        bool, Field(description="Whether to enable PyTorch profiler during training")
+    ] = False
+
+    wait: Annotated[int, Field(ge=0, description="Profiler wait steps")] = 0
+    warmup: Annotated[int, Field(ge=0, description="Profiler warmup steps")] = 1
+    active: Annotated[int, Field(ge=1, description="Profiler active steps")] = 3
+    repeat: Annotated[int, Field(ge=1, description="Profiler repeat cycles")] = 1
+
+    output_dir: Annotated[
+        Path, Field(description="Directory to save profiler traces")
+    ] = Path("outputs/profiler")
+
+
 class WeightCheckpointConfig(BaseConfig):
     """Configures checkpointing the full model, optimizer and training state for resuming training."""
 
