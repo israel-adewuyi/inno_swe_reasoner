@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import wandb
 import torch
+import wandb
 from torch.utils.tensorboard import SummaryWriter
 from transformers.tokenization_utils import PreTrainedTokenizer
 
@@ -373,9 +373,7 @@ class TensorBoardMonitor:
             return
         if not self.enabled:
             return
-        print("I was logged")
         step = metrics.get("step", None)
-        print(f"Step is {step}")
         for key, value in metrics.items():
             if isinstance(value, (int, float)):
                 self.writer.add_scalar(key, value, global_step=step)
