@@ -143,24 +143,26 @@ class CoconutEvaluator:
 
         return processed_dataset
 
-    def generate_samples(
+    def generate_samples_batch(
         self,
         model: AutoModelForCausalLM,
         tokenizer: AutoTokenizer,
-        prompt: str,
+        prompts: list[str],
         num_completions: int,
-    ) -> list[str]:
-        """Generate one or more samples from the model (no batching)."""
-        # Format prompt for Qwen chat format
-        messages = [{"role": "user", "content": prompt}]
-        formatted_prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+    ) -> list[list[str]]:
+        """Generate samples for a batch of prompts."""
+        messages_list = [[{"role": "user", "content": prompt}] for prompt in prompts]
+        formatted_prompts = [
+            tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            for messages in messages_list
+        ]
 
-        # Tokenize
-        inputs = tokenizer(formatted_prompt, return_tensors="pt").to("cuda")
+        inputs = tokenizer(
+            formatted_prompts, return_tensors="pt", padding=True
+        ).to("cuda")
 
-        # Generate
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
@@ -172,15 +174,20 @@ class CoconutEvaluator:
                 eos_token_id=tokenizer.eos_token_id,
             )
 
-        # Decode only the generated part for each sequence
-        input_len = inputs.input_ids.shape[1]
+        # Compute per-sample prompt lengths from attention mask
+        input_lengths = inputs.attention_mask.sum(dim=1).tolist()
         generated_texts = []
-        for seq in outputs:
+        for i, seq in enumerate(outputs):
+            input_len = input_lengths[i // num_completions]
             generated_ids = seq[input_len:]
             generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
             generated_texts.append(self._extract_code_block(generated_text))
 
-        return generated_texts
+        # Regroup into list per prompt
+        grouped = []
+        for i in range(0, len(generated_texts), num_completions):
+            grouped.append(generated_texts[i : i + num_completions])
+        return grouped
 
     def eval(self, step: int):
         # Load model and tokenizer
@@ -194,18 +201,33 @@ class CoconutEvaluator:
         results_dir.mkdir(parents=True, exist_ok=True)
 
         results = []
+        batch = []
+        batch_meta = []
+        batch_size = max(1, self.config.eval_batch_size)
         for example in tqdm(self.dataset, desc="Evaluating"):
-            generated_solutions = self.generate_samples(
+            batch.append(example["prompt"])
+            batch_meta.append(example["question_id"])
+            if len(batch) == batch_size:
+                generated_batches = self.generate_samples_batch(
+                    model,
+                    tokenizer,
+                    batch,
+                    num_completions=self.config.num_completions,
+                )
+                for qid, codes in zip(batch_meta, generated_batches):
+                    results.append({"question_id": qid, "code_list": codes})
+                batch = []
+                batch_meta = []
+
+        if batch:
+            generated_batches = self.generate_samples_batch(
                 model,
                 tokenizer,
-                example["prompt"],
+                batch,
                 num_completions=self.config.num_completions,
             )
-            result = {
-                "question_id": example["question_id"],
-                "code_list": generated_solutions,
-            }
-            results.append(result)
+            for qid, codes in zip(batch_meta, generated_batches):
+                results.append({"question_id": qid, "code_list": codes})
 
         output_path = results_dir / "results_final.json"
         self._save_results(results, output_path)

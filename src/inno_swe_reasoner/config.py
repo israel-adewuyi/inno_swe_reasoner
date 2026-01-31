@@ -224,6 +224,10 @@ class CoconutEvalConfig(BaseConfig):
         int, Field(description="Number of completions to sample per prompt")
     ] = 1
 
+    eval_batch_size: Annotated[
+        int, Field(description="Batch size for evaluation generation")
+    ] = 1
+
     lcb_custom_evaluate: Annotated[
         bool,
         Field(
