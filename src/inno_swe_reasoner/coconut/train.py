@@ -65,9 +65,11 @@ def train(config: CoconutTrainerConfig):
 
     # COCONUT Training
     step = 0
+    did_eval_at_start = False
     for stage in range(config.data.num_stages + 1):
-        evaluator.eval(0)
-        break
+        if not did_eval_at_start:
+            evaluator.eval(step)
+            did_eval_at_start = True
         if stage > 0:
             logger.info(f"Resetting optimizer at Stage {stage}")
             optimizer = setup_optimizer(config.optim, model)
@@ -244,6 +246,7 @@ def train(config: CoconutTrainerConfig):
                 optimizer.zero_grad()
 
         weightckpt_manager.save(model=model, step=step)
+        evaluator.eval(step)
 
 
 def main():
