@@ -28,13 +28,16 @@ class CheckpointManager:
 
         self._logger.info(f"Saving checkpoint at step {step} to {ckpt_path}")
 
+        # Prefer saving the underlying HF model if wrapped
+        base_model = getattr(model, "model", model)
+
         # Save model state dict (PyTorch format)
         model_path = ckpt_path / "pytorch_model.bin"
-        torch.save(model.state_dict(), model_path)
+        torch.save(base_model.state_dict(), model_path)
 
         # If the model has a save_pretrained method (HuggingFace models), use it
-        if hasattr(model, "save_pretrained"):
-            model.save_pretrained(ckpt_path)
+        if hasattr(base_model, "save_pretrained"):
+            base_model.save_pretrained(ckpt_path)
             self._logger.info(f"Saved HuggingFace model to {ckpt_path}")
 
         # Save optimizer state if provided
