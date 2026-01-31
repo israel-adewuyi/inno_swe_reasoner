@@ -10,6 +10,14 @@ max_seq_length = 1024
 project = "DEMO"
 name = "demo_1"
 
+[profiler]
+enabled = true
+wait = 0
+warmup = 1
+active = 3
+repeat = 1
+output_dir = "outputs/profiler"
+
 [checkpoint]
 interval = 1
 
@@ -21,3 +29,4 @@ num_samples = 256
 lcb_custom_evaluate = true
 lcb_custom_evaluator_module = "lcb_runner.runner.custom_evaluator"
 lcb_custom_eval_args = ["--release_version", "v6"]
+eval_batch_size = 4
