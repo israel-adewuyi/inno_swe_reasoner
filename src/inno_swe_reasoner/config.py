@@ -229,7 +229,7 @@ class CoconutEvalConfig(BaseConfig):
         Field(
             description="Whether to run LiveCodeBench custom evaluator on saved outputs"
         ),
-    ] = False
+    ] = True
 
     lcb_custom_evaluator_module: Annotated[
         str | None,
