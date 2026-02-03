@@ -102,6 +102,8 @@ def train(config: CoconutTrainerConfig):
                 step += 1
                 step_start_time = time.time()
                 batch_loss = 0.0
+                if torch.cuda.is_available():
+                    torch.cuda.reset_peak_memory_stats()
 
                 # This goes through each datapoint one by one
                 # Justification is that CoT on SWE_SWISS_SFT dataset is easily > 250K.
@@ -260,6 +262,22 @@ def train(config: CoconutTrainerConfig):
                     "training/batch_size": len(batch["prompt"]),
                     "step": step,
                 }
+                if torch.cuda.is_available():
+                    allocated = torch.cuda.memory_allocated()
+                    reserved = torch.cuda.memory_reserved()
+                    peak_alloc = torch.cuda.max_memory_allocated()
+                    peak_reserved = torch.cuda.max_memory_reserved()
+                    log_metrics.update(
+                        {
+                            "memory/allocated_gb": allocated / 1e9,
+                            "memory/reserved_gb": reserved / 1e9,
+                            "memory/peak_allocated_gb": peak_alloc / 1e9,
+                            "memory/peak_reserved_gb": peak_reserved / 1e9,
+                            "memory/reserved_to_allocated": (
+                                reserved / allocated if allocated > 0 else 0.0
+                            ),
+                        }
+                    )
 
                 monitor.log(log_metrics)
                 step_message = f"Step {step} | Time: {step_time:.2f}s | Loss: {batch_loss.item():.4f} | Grad. Norm: {grad_norm:.4f}"
